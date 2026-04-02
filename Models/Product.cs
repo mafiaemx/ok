@@ -13,6 +13,8 @@ public partial class Product
 
     public string Unit { get; set; } = null!;
 
+    public DateOnly? ExpirationDate { get; set; }
+
     public virtual ICollection<Demand> Demands { get; set; } = new List<Demand>();
 
     public virtual ICollection<ShipmentItem> ShipmentItems { get; set; } = new List<ShipmentItem>();

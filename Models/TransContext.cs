@@ -4,13 +4,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ok.Models;
 
-public partial class AppDbContext : DbContext
+public partial class TransContext : DbContext
 {
-    public AppDbContext()
+    public TransContext()
     {
     }
 
-    public AppDbContext(DbContextOptions<AppDbContext> options)
+    public TransContext(DbContextOptions<TransContext> options)
         : base(options)
     {
     }
@@ -91,9 +91,11 @@ public partial class AppDbContext : DbContext
 
             entity.Property(e => e.ProductId).HasColumnName("product_id");
             entity.Property(e => e.Amount).HasColumnName("amount");
+            entity.Property(e => e.ExpirationDate).HasColumnName("expiration_date");
             entity.Property(e => e.Name).HasColumnName("name");
             entity.Property(e => e.Unit).HasColumnName("unit");
         });
+
         modelBuilder.Entity<Sclad>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("sclad_pkey");
