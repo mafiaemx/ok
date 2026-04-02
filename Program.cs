@@ -1,14 +1,21 @@
 using Microsoft.EntityFrameworkCore;
 using ok.Models;
+using ok.Service;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
-var app = builder.Build();
+
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<Rk4Service>();
+builder.Services.AddScoped<BwmService>();
+builder.Services.AddScoped<LogisticsService>();
+
+var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
