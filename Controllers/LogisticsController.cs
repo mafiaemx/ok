@@ -1,156 +1,81 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.EntityFrameworkCore;
 using ok.Models;
+using ok.Service;
+using Microsoft.EntityFrameworkCore;
 
 namespace ok.Controllers
 {
-    public class LogisticsController : Controller
+    [ApiController]
+    [Route("api/[controller]")]
+    public class LogisticsController : ControllerBase
     {
+        private readonly LogisticsService _logisticsService;
         private readonly AppDbContext _context;
 
-        public LogisticsController(AppDbContext context)
+        public LogisticsController(LogisticsService logisticsService, AppDbContext context)
         {
+            _logisticsService = logisticsService;
             _context = context;
         }
 
-        // GET: Logistics
-        public async Task<IActionResult> Index()
+        [HttpPost("run-distribution/{scladId}")]
+        public async Task<IActionResult> RunFullDistribution(int scladId)
         {
-            return View(await _context.Products.ToListAsync());
-        }
+            var sclad = await _context.Sclads.FindAsync(scladId);
+            if (sclad == null) return NotFound("Склад не знайдено");
 
-        // GET: Logistics/Details/5
-        public async Task<IActionResult> Details(int? id)
-        {
-            if (id == null)
+            try
             {
-                return NotFound();
-            }
+                var plan = _logisticsService.DistributeFromWarehouse(scladId);
 
-            var product = await _context.Products
-                .FirstOrDefaultAsync(m => m.ProductId == id);
-            if (product == null)
-            {
-                return NotFound();
-            }
+                if (plan.Count == 0) return Ok("Розподіл не потрібен, дефіциту немає.");
 
-            return View(product);
-        }
+                foreach (var item in plan)
+                {
+                    var shipment = new Shipment
+                    {
+                        ScladId = scladId,
+                        PointId = item.Key, 
+                        CreatedAt = DateTime.Now
+                    };
 
-        // GET: Logistics/Create
-        public IActionResult Create()
-        {
-            return View();
-        }
+                    _context.Shipments.Add(shipment);
+                    await _context.SaveChangesAsync(); 
 
-        // POST: Logistics/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("ProductId,Name,Amount,Unit")] Product product)
-        {
-            if (ModelState.IsValid)
-            {
-                _context.Add(product);
+                    var shipmentItem = new ShipmentItem
+                    {
+                        ShipmentId = shipment.Id,
+                        ProductId = 1, 
+                        Quantity = (decimal)item.Value
+                    };
+                    _context.ShipmentItems.Add(shipmentItem);
+                }
+
                 await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
-            }
-            return View(product);
-        }
 
-        // GET: Logistics/Edit/5
-        public async Task<IActionResult> Edit(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var product = await _context.Products.FindAsync(id);
-            if (product == null)
-            {
-                return NotFound();
-            }
-            return View(product);
-        }
-
-        // POST: Logistics/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("ProductId,Name,Amount,Unit")] Product product)
-        {
-            if (id != product.ProductId)
-            {
-                return NotFound();
-            }
-
-            if (ModelState.IsValid)
-            {
-                try
+                return Ok(new
                 {
-                    _context.Update(product);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!ProductExists(product.ProductId))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-                return RedirectToAction(nameof(Index));
+                    Message = "Логістичну схему оптимізовано та збережено в БД",
+                    DistributionPlan = plan
+                });
             }
-            return View(product);
-        }
-
-        // GET: Logistics/Delete/5
-        public async Task<IActionResult> Delete(int? id)
-        {
-            if (id == null)
+            catch (Exception ex)
             {
-                return NotFound();
+                return StatusCode(500, $"Критична помилка алгоритму: {ex.Message}");
             }
-
-            var product = await _context.Products
-                .FirstOrDefaultAsync(m => m.ProductId == id);
-            if (product == null)
-            {
-                return NotFound();
-            }
-
-            return View(product);
         }
 
-        // POST: Logistics/Delete/5
-        [HttpPost, ActionName("Delete")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteConfirmed(int id)
+        [HttpGet("stock-by-point")]
+        public async Task<IActionResult> GetStockByPoint()
         {
-            var product = await _context.Products.FindAsync(id);
-            if (product != null)
-            {
-                _context.Products.Remove(product);
-            }
+            var stock = await _context.Zaluskies
+                .Include(z => z.Product)
+                .Include(z => z.Sclad)
+                .ToListAsync();
 
-            await _context.SaveChangesAsync();
-            return RedirectToAction(nameof(Index));
+            return Ok(stock);
         }
 
-        private bool ProductExists(int id)
-        {
-            return _context.Products.Any(e => e.ProductId == id);
-        }
+        
     }
 }
