@@ -94,7 +94,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Name).HasColumnName("name");
             entity.Property(e => e.Unit).HasColumnName("unit");
         });
-
         modelBuilder.Entity<Sclad>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("sclad_pkey");
