@@ -9,6 +9,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+var llmApiKey = builder.Configuration["LLM:ApiKey"];
+var llmEndpoint = builder.Configuration["LLM:Endpoint"];
+builder.Services.AddHttpClient<LlmService>();
+builder.Services.AddSingleton(sp =>
+    new LlmService(llmApiKey, llmEndpoint, sp.GetRequiredService<HttpClient>()));
+
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
