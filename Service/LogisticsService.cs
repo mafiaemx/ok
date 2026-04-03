@@ -1,9 +1,7 @@
-﻿
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Google.OrTools.Graph;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ok.Models;
 
@@ -34,28 +32,26 @@ namespace ok.Service
                 .ToDictionary(z => z.ProductId, z => (long)z.Quantity);
 
             MinCostFlow minCostFlow = new MinCostFlow();
-            int warehouseNode = 0;
+            int warehouseNode = 0; 
             long totalDemand = 0;
 
-            var targetsMapping = new Dictionary<int, int>();
+            var targetsMapping = new Dictionary<int, int>(); 
 
             for (int i = 0; i < deliveryPoints.Count; i++)
             {
                 var point = deliveryPoints[i];
-                int storeNode = i + 1;
+                int storeNode = i + 1; 
                 targetsMapping.Add(storeNode, point.PointId);
 
-                var productsForPoint = point.Demands
-                    .Select(d => d.Product)
-                    .Where(p => p != null)
-                    .ToList();
-
-                double consumptionRate = 5.0; 
                 double required = (double)point.Demands.Sum(d => d.RequiredQuantity);
-                double distance = 10.0; 
+                double consumptionRate = 5.0; 
                 double forecast = _rk4.RungeKutta4(scladId, consumptionRate, 5);
+
                 long deficit = (long)Math.Max(0, required - forecast);
+
+                double distance = 10.0; 
                 double priority = CalculatePriority(deficit, required, distance);
+
                 if (deficit > 0)
                 {
                     minCostFlow.SetNodeSupply(storeNode, -deficit);
@@ -72,7 +68,6 @@ namespace ok.Service
 
             long totalWarehouseSupply = warehouseStock.Values.Sum();
             long actualSupply = Math.Min(totalWarehouseSupply, totalDemand);
-
             minCostFlow.SetNodeSupply(warehouseNode, actualSupply);
 
             MinCostFlow.Status status = minCostFlow.Solve();
@@ -86,7 +81,7 @@ namespace ok.Service
                     {
                         int storeNode = minCostFlow.Head(i);
                         int pointId = targetsMapping[storeNode];
-                        distributionPlan.Add(pointId, minCostFlow.Flow(i));
+                        distributionPlan[pointId] = minCostFlow.Flow(i);
                     }
                 }
             }
@@ -94,9 +89,10 @@ namespace ok.Service
             return distributionPlan;
         }
 
-        public double CalculatePriority(double deficit, double required, double distance)
+        private double CalculatePriority(double deficit, double required, double distance)
         {
             double penalty = 100;
+
             double[] bestToOthers = { 1, 5, 9 };
             double[] othersToWorst = { 9, 4, 1 };
             int bestIndex = 0;
@@ -105,10 +101,7 @@ namespace ok.Service
             var weights = _bwm.CalculateWeights(bestToOthers, othersToWorst, bestIndex, worstIndex);
 
             double[] criteria = { deficit, penalty, distance };
-
             return _bwm.CalculateScore(criteria, weights);
         }
-        
     }
-
 }
