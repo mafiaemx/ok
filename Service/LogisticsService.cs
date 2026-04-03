@@ -53,10 +53,9 @@ namespace ok.Service
                 double consumptionRate = 5.0; 
                 double required = (double)point.Demands.Sum(d => d.RequiredQuantity);
                 double distance = 10.0; 
-                double priority = CalculatePriority(productsForPoint!, consumptionRate, required, distance);
-                double forecast = _rk4.RungeKutta4(productsForPoint!, consumptionRate, 5);
+                double forecast = _rk4.RungeKutta4(scladId, consumptionRate, 5);
                 long deficit = (long)Math.Max(0, required - forecast);
-
+                double priority = CalculatePriority(deficit, required, distance);
                 if (deficit > 0)
                 {
                     minCostFlow.SetNodeSupply(storeNode, -deficit);
@@ -95,22 +94,11 @@ namespace ok.Service
             return distributionPlan;
         }
 
-        public double CalculatePriority(List<Product> products, double consumptionRate, double required, double distance)
+        public double CalculatePriority(double deficit, double required, double distance)
         {
-            var productsClone = products.Select(p => new Product
-            {
-                Amount = p.Amount,
-                ExpirationDate = p.ExpirationDate
-            }).ToList();
-
-            double forecast = _rk4.RungeKutta4(productsClone, consumptionRate, 5);
-
-            double deficit = Math.Max(0, required - forecast);
             double penalty = 100;
-
             double[] bestToOthers = { 1, 5, 9 };
             double[] othersToWorst = { 9, 4, 1 };
-
             int bestIndex = 0;
             int worstIndex = 2;
 
@@ -118,7 +106,7 @@ namespace ok.Service
 
             double[] criteria = { deficit, penalty, distance };
 
-            return 0;
+            return _bwm.CalculateScore(criteria, weights);
         }
         
     }
