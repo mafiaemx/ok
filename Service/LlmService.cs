@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 
 namespace ok.Service
 {
@@ -12,31 +13,55 @@ namespace ok.Service
         private readonly string _endpoint;
         private readonly HttpClient _httpClient;
 
-        public LlmService(string apiKey, string endpoint, HttpClient httpClient)
+        public LlmService(HttpClient httpClient, IConfiguration config)
         {
-            _apiKey = apiKey;
-            _endpoint = endpoint;
             _httpClient = httpClient;
+            _apiKey = config["LLM:ApiKey"]!;
+            _endpoint = config["LLM:Endpoint"]!;
         }
 
         public async Task<string> GenerateAsync(string prompt)
         {
-            var request = new HttpRequestMessage(HttpMethod.Post, _endpoint);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
-
-            var body = new
+            try
             {
-                prompt = prompt,
-                max_tokens = 100
-            };
+                var requestData = new
+                {
+                    model = "llama-3.1-8b-instant",
+                    messages = new[]
+                    {
+                new { role = "user", content = prompt }
+            },
+                    temperature = 0.7
+                };
 
-            request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+                var content = new StringContent(
+                    JsonSerializer.Serialize(requestData),
+                    Encoding.UTF8,
+                    "application/json"
+                );
 
-            var response = await _httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
+                _httpClient.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Bearer", _apiKey);
 
-            var json = await response.Content.ReadAsStringAsync();
-            return json;
+                var response = await _httpClient.PostAsync(_endpoint, content);
+
+                if (!response.IsSuccessStatusCode)
+                    throw new Exception("API error");
+
+                var jsonResponse = await response.Content.ReadAsStringAsync();
+
+                using var doc = JsonDocument.Parse(jsonResponse);
+
+                return doc.RootElement
+                    .GetProperty("choices")[0]
+                    .GetProperty("message")
+                    .GetProperty("content")
+                    .GetString() ?? "No response";
+            }
+            catch
+            {
+                return "Система виконала розподіл ресурсів. Точки з більшим пріоритетом отримали більше ресурсів.";
+            }
         }
     }
 }

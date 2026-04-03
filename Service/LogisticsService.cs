@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Google.OrTools.Graph;
 using Microsoft.EntityFrameworkCore;
 using ok.Models;
 
@@ -20,88 +19,117 @@ namespace ok.Service
             _context = context;
         }
 
-        public Dictionary<int, long> DistributeFromWarehouse(int scladId)
+        public DistributionResult DistributeFromWarehouse(int scladId)
         {
+            var sclad = _context.Sclads.FirstOrDefault(s => s.Id == scladId);
             var deliveryPoints = _context.DeliveryPoints
                 .Include(dp => dp.Demands)
-                    .ThenInclude(d => d.Product)
+                .ThenInclude(d => d.Product)
                 .ToList();
 
             var warehouseStock = _context.Zaluskies
                 .Where(z => z.ScladId == scladId)
-                .ToDictionary(z => z.ProductId, z => (long)z.Quantity);
+                .ToList();
 
-            MinCostFlow minCostFlow = new MinCostFlow();
-            int warehouseNode = 0; 
-            long totalDemand = 0;
+            long totalWarehouseSupply = (long)warehouseStock.Sum(z => z.Quantity);
 
-            var targetsMapping = new Dictionary<int, int>(); 
+            var pointInfos = new List<PointResult>();
 
-            for (int i = 0; i < deliveryPoints.Count; i++)
+            foreach (var point in deliveryPoints)
             {
-                var point = deliveryPoints[i];
-                int storeNode = i + 1; 
-                targetsMapping.Add(storeNode, point.PointId);
+                long required = (long)point.Demands.Sum(d => d.RequiredQuantity);
 
-                double required = (double)point.Demands.Sum(d => d.RequiredQuantity);
-                double consumptionRate = 5.0; 
-                double forecast = _rk4.RungeKutta4(scladId, consumptionRate, 5);
+                double priorityLevel = point.Demands.Any()
+                    ? point.Demands.Average(d => (double)d.CalculatedWeight)
+                    : 1.0;
 
-                long deficit = (long)Math.Max(0, required - forecast);
+                if (required <= 0)
+                    continue;
 
-                double distance = 10.0; 
-                double priority = CalculatePriority(deficit, required, distance);
+                double distance = 5 + (point.PointId % 20);
+                double priorityScore = CalculatePriority(required, priorityLevel, distance);
 
-                if (deficit > 0)
+                pointInfos.Add(new PointResult
                 {
-                    minCostFlow.SetNodeSupply(storeNode, -deficit);
-                    totalDemand += deficit;
-
-                    long edgeCost = (long)Math.Max(1, 1000 - priority);
-                    minCostFlow.AddArcWithCapacityAndUnitCost(warehouseNode, storeNode, deficit, edgeCost);
-                }
-                else
-                {
-                    minCostFlow.SetNodeSupply(storeNode, 0);
-                }
+                    PointId = point.PointId,
+                    Name = point.Name,
+                    Required = required,
+                    Priority = priorityScore
+                });
             }
 
-            long totalWarehouseSupply = warehouseStock.Values.Sum();
-            long actualSupply = Math.Min(totalWarehouseSupply, totalDemand);
-            minCostFlow.SetNodeSupply(warehouseNode, actualSupply);
+            pointInfos = pointInfos
+                .OrderByDescending(p => p.Priority)
+                .ToList();
 
-            MinCostFlow.Status status = minCostFlow.Solve();
-            Dictionary<int, long> distributionPlan = new Dictionary<int, long>();
+            long remaining = totalWarehouseSupply;
 
-            if (status == MinCostFlow.Status.OPTIMAL)
+            foreach (var p in pointInfos)
             {
-                for (int i = 0; i < minCostFlow.NumArcs(); ++i)
-                {
-                    if (minCostFlow.Flow(i) > 0)
-                    {
-                        int storeNode = minCostFlow.Head(i);
-                        int pointId = targetsMapping[storeNode];
-                        distributionPlan[pointId] = minCostFlow.Flow(i);
-                    }
-                }
+                if (remaining <= 0)
+                    break;
+
+                long allocated = Math.Min(remaining, p.Required);
+
+                p.Allocated = allocated;
+                remaining -= allocated;
             }
 
-            return distributionPlan;
+            return new DistributionResult
+            {
+                WarehouseName = sclad?.Name ?? "Невідомий склад",
+                Points = pointInfos,
+                RemainingStock = remaining
+            };
         }
 
-        private double CalculatePriority(double deficit, double required, double distance)
-        {
-            double penalty = 100;
+       
 
-            double[] bestToOthers = { 1, 5, 9 };
-            double[] othersToWorst = { 9, 4, 1 };
+        private double CalculatePriority(double deficit, double weight, double distance)
+        {
+            double[] bestToOthers = { 1, 3, 5 };
+            double[] othersToWorst = { 5, 3, 1 };
+
             int bestIndex = 0;
             int worstIndex = 2;
 
-            var weights = _bwm.CalculateWeights(bestToOthers, othersToWorst, bestIndex, worstIndex);
+            var weights = _bwm.CalculateWeights(
+                bestToOthers,
+                othersToWorst,
+                bestIndex,
+                worstIndex
+            );
 
-            double[] criteria = { deficit, penalty, distance };
+            double[] criteria =
+            {
+                deficit,
+                weight * 100,
+                distance
+            };
+
             return _bwm.CalculateScore(criteria, weights);
         }
+
+        private class PointNeedInfo
+        {
+            public int PointId { get; set; }
+            public long Deficit { get; set; }
+            public double PriorityScore { get; set; }
+        }
+    }
+    public class DistributionResult
+    {
+        public string WarehouseName { get; set; } = "";
+        public List<PointResult> Points { get; set; } = new();
+        public long RemainingStock { get; set; }
+    }
+
+    public class PointResult
+    {
+        public int PointId { get; set; }
+        public string Name { get; set; } = "";
+        public long Required { get; set; }
+        public long Allocated { get; set; }
+        public double Priority { get; set; }
     }
 }

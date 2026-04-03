@@ -88,6 +88,8 @@ public partial class AppDbContext : DbContext
             entity.ToTable("products");
 
             entity.Property(e => e.ProductId).HasColumnName("product_id");
+            entity.Property(e => e.ExpirationDate)
+    .HasColumnName("expiration_date");
             entity.Property(e => e.Amount).HasColumnName("amount");
             entity.Property(e => e.Name).HasColumnName("name");
             entity.Property(e => e.Unit).HasColumnName("unit");

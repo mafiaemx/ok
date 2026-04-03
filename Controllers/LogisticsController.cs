@@ -28,26 +28,31 @@ namespace ok.Controllers
             {
                 var plan = _logisticsService.DistributeFromWarehouse(scladId);
 
-                if (plan.Count == 0) return Ok("Розподіл не потрібен, дефіциту немає.");
+                if (plan.Points.Count == 0)
+                    return Ok("Розподіл не потрібен, попиту немає.");
 
-                foreach (var item in plan)
+                foreach (var item in plan.Points)
                 {
+                    if (item.Allocated <= 0)
+                        continue;
+
                     var shipment = new Shipment
                     {
                         ScladId = scladId,
-                        PointId = item.Key, 
+                        PointId = item.PointId,
                         CreatedAt = DateTime.Now
                     };
 
                     _context.Shipments.Add(shipment);
-                    await _context.SaveChangesAsync(); 
+                    await _context.SaveChangesAsync();
 
                     var shipmentItem = new ShipmentItem
                     {
                         ShipmentId = shipment.Id,
-                        ProductId = 1, 
-                        Quantity = (decimal)item.Value
+                        ProductId = 1,
+                        Quantity = (decimal)item.Allocated
                     };
+
                     _context.ShipmentItems.Add(shipmentItem);
                 }
 
@@ -55,27 +60,17 @@ namespace ok.Controllers
 
                 return Ok(new
                 {
-                    Message = "Логістичну схему оптимізовано та збережено в БД",
-                    DistributionPlan = plan
+                    Message = "Логістичну схему оптимізовано",
+                    Points = plan.Points,
+                    RemainingStock = plan.RemainingStock
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Критична помилка алгоритму: {ex.Message}");
+                return StatusCode(500, $"Критична помилка: {ex.Message}");
             }
         }
 
-        [HttpGet("stock-by-point")]
-        public async Task<IActionResult> GetStockByPoint()
-        {
-            var stock = await _context.Zaluskies
-                .Include(z => z.Product)
-                .Include(z => z.Sclad)
-                .ToListAsync();
 
-            return Ok(stock);
-        }
-
-        
     }
 }
