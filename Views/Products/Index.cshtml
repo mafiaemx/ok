@@ -30,7 +30,7 @@
             <th></th>
         </tr>
     </thead>
-    <tbody>
+    <tbody id="productsTableBody">
 @foreach (var item in Model) {
         <tr>
             <td>
@@ -51,5 +51,26 @@
 }
     </tbody>
 </table>
+
+<script>
+    setInterval(async () => {
+        try {
+            const response = await fetch('/Products/JsonData');
+            const products = await response.json();
+            const tbody = document.getElementById('productsTableBody');
+            tbody.innerHTML = products.map(p => `
+                <tr>
+                    <td>${p.name}</td>
+                    <td>${p.amount}</td>
+                    <td>${p.unit}</td>
+                    <td>
+                        <a href="/Products/Edit/${p.productId}">Edit</a> |
+                        <a href="/Products/Details/${p.productId}">Details</a> |
+                        <a href="/Products/Delete/${p.productId}">Delete</a>
+                    </td>
+                </tr>`).join('');
+        } catch { }
+    }, 30000);
+</script>
 </body>
 </html>

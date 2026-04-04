@@ -24,6 +24,16 @@ namespace ok.Controllers
             return View(await _context.Products.ToListAsync());
         }
 
+        // GET: Products/JsonData (for auto-refresh polling)
+        [HttpGet]
+        public async Task<IActionResult> JsonData()
+        {
+            var products = await _context.Products
+                .Select(p => new { p.ProductId, p.Name, p.Amount, p.Unit })
+                .ToListAsync();
+            return Json(products);
+        }
+
         // GET: Products/Details/5
         public async Task<IActionResult> Details(int? id)
         {

@@ -13,6 +13,8 @@ namespace ok.Ai.Tools
             _llm = llm;
         }
 
+        public LogisticsService GetService() => _service;
+
         public async Task<string> ExecuteAsync(int scladId)
         {
 
