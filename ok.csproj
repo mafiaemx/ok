@@ -15,4 +15,8 @@
     <PackageReference Include="Google.OrTools" Version="9.*" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Data\" />
+  </ItemGroup>
+
 </Project>

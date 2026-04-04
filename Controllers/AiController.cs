@@ -41,6 +41,7 @@ namespace ok.Controllers
         [HttpGet("warehouse-summary/{scladId}")]
         public async Task<IActionResult> WarehouseSummary(int scladId)
         {
+           
             var sclad = await _context.Sclads.FindAsync(scladId);
             if (sclad == null)
                 return NotFound("Склад не знайдено");
